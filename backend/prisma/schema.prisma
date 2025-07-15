@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String  @id @default(cuid())
+  name       String
+  email      String  @unique
+  password   String
+  role       Role
+  department String
+  studentId  String?
+  employeeId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  StudentAppointments   Appointment[]  @relation("StudentAppointments")
+  CounselorAppointments Appointment[]  @relation("CounselorAppointments")
+  Availability          Availability[]
+}
+
+enum Role {
+  STUDENT
+  COUNSELOR
+  CHAIRPERSON
+}
+
+model Appointment {
+  id String @id @default(uuid())
+
+  date      DateTime
+  startTime String
+  endTime   String
+  duration  Int
+  location  String?
+  type      String
+  status    AppointmentStatus @default(PENDING)
+  notes     String?
+
+  studentId   String?
+  counselorId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student   User? @relation("StudentAppointments", fields: [studentId], references: [id])
+  counselor User? @relation("CounselorAppointments", fields: [counselorId], references: [id])
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Availability {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  dayOfWeek DayOfWeek
+  startTime String
+  endTime   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
