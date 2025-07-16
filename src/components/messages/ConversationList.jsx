@@ -18,11 +18,9 @@ export default function ConversationList({
 
   const filteredConversations = conversations.filter((conversation) => {
     const otherParticipant = conversation.participants.find(
-      (p) => p.id !== currentUserId
+      (p) => p.userId !== currentUserId
     );
-    return otherParticipant?.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
+    return otherParticipant?.user?.name?.toLowerCase()?.includes(searchQuery.toLowerCase());
   });
 
   const canStartConversation =

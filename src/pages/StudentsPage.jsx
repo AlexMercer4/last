@@ -1,85 +1,104 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Search } from "lucide-react";
+import { Users, Search, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useStudents } from "@/hooks/useUsers";
+import { useSocket } from "@/contexts/SocketContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { userKeys } from "@/hooks/useUsers";
 
 export default function StudentsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { socket, isConnected } = useSocket();
+  
+  // State for search and filtering
   const [searchQuery, setSearchQuery] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [semesterFilter, setSemesterFilter] = useState("");
+  const [cgpaFilter, setCgpaFilter] = useState("");
 
-  // Mock students data - replace with actual API calls
-  const [students] = useState([
-    {
-      id: "1",
-      name: "Ahmad Ali",
-      studentId: "CS-2024-001",
-      email: "ahmad.ali@student.edu",
-      department: "Computer Science",
-      semester: "6th",
-      cgpa: 3.85,
-      lastSession: "2024-06-20",
-      totalSessions: 8,
-    },
-    {
-      id: "2",
-      name: "Fatima Khan",
-      studentId: "EE-2024-015",
-      email: "fatima.khan@student.edu",
-      department: "Electrical Engineering",
-      semester: "4th",
-      cgpa: 3.92,
-      lastSession: "2024-06-18",
-      totalSessions: 5,
-    },
-    {
-      id: "3",
-      name: "Hassan Ahmed",
-      studentId: "ME-2024-032",
-      email: "hassan.ahmed@student.edu",
-      department: "Mechanical Engineering",
-      semester: "8th",
-      cgpa: 2.95,
-      lastSession: "2024-06-15",
-      totalSessions: 12,
-    },
-    {
-      id: "4",
-      name: "Ayesha Malik",
-      studentId: "CS-2024-045",
-      email: "ayesha.malik@student.edu",
-      department: "Computer Science",
-      semester: "2nd",
-      cgpa: 3.67,
-      lastSession: "2024-06-10",
-      totalSessions: 3,
-    },
-    {
-      id: "5",
-      name: "Omar Sheikh",
-      studentId: "CE-2024-021",
-      email: "omar.sheikh@student.edu",
-      department: "Civil Engineering",
-      semester: "6th",
-      cgpa: 3.45,
-      totalSessions: 2,
-    },
-  ]);
+  // Fetch students data using React Query
+  const { 
+    data: students = [], 
+    isLoading, 
+    isError, 
+    error,
+    refetch 
+  } = useStudents();
 
-  const handleViewDetails = (student) => {
-    // Navigate to student profile page
-    navigate(`/profile/${student.id}`);
-  };
+  // Set up real-time updates via Socket.io
+  useEffect(() => {
+    if (socket && isConnected) {
+      // Listen for student data updates
+      const handleStudentUpdate = (updatedStudent) => {
+        queryClient.setQueryData(userKeys.students, (oldData) => {
+          if (!oldData) return oldData;
+          return oldData.map(student => 
+            student.id === updatedStudent.id ? { ...student, ...updatedStudent } : student
+          );
+        });
+      };
+
+      const handleStudentAdded = (newStudent) => {
+        if (newStudent.role === 'STUDENT') {
+          queryClient.setQueryData(userKeys.students, (oldData) => {
+            if (!oldData) return [newStudent];
+            return [...oldData, newStudent];
+          });
+        }
+      };
+
+      const handleStudentRemoved = (studentId) => {
+        queryClient.setQueryData(userKeys.students, (oldData) => {
+          if (!oldData) return oldData;
+          return oldData.filter(student => student.id !== studentId);
+        });
+      };
+
+      // Socket event listeners
+      socket.on('student-updated', handleStudentUpdate);
+      socket.on('student-added', handleStudentAdded);
+      socket.on('student-removed', handleStudentRemoved);
+      socket.on('user-updated', handleStudentUpdate); // Generic user update
+
+      return () => {
+        socket.off('student-updated', handleStudentUpdate);
+        socket.off('student-added', handleStudentAdded);
+        socket.off('student-removed', handleStudentRemoved);
+        socket.off('user-updated', handleStudentUpdate);
+      };
+    }
+  }, [socket, isConnected, queryClient]);
+
+  // Get unique values for filter options
+  const filterOptions = useMemo(() => {
+    if (!students.length) return { departments: [], semesters: [], cgpaRanges: [] };
+    
+    const departments = [...new Set(students.map(s => s.department).filter(Boolean))].sort();
+    const semesters = [...new Set(students.map(s => s.semester).filter(Boolean))].sort();
+    const cgpaRanges = [
+      { label: "3.5 and above", value: "high" },
+      { label: "3.0 - 3.49", value: "medium" },
+      { label: "Below 3.0", value: "low" }
+    ];
+    
+    return { departments, semesters, cgpaRanges };
+  }, [students]);
+
+
 
   const handleMessageStudent = (student) => {
     // Navigate to messages page with student ID as query parameter
     navigate(`/messages?userId=${student.id}`);
   };
 
-  const handleViewNotes = (student) => {
-    // Navigate to student notes page
-    navigate(`/students/${student.id}/notes`);
+  const handleViewProfile = (student) => {
+    // Navigate to student profile page
+    navigate(`/students/${student.id}`);
   };
 
   const getCGPAColor = (cgpa) => {
@@ -88,14 +107,47 @@ export default function StudentsPage() {
     return "text-red-600";
   };
 
-  const filteredStudents = students.filter((student) => {
-    const matchesSearch =
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email.toLowerCase().includes(searchQuery.toLowerCase());
+  // Comprehensive filtering logic
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      // Search filter
+      const matchesSearch = !searchQuery || 
+        student.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.studentId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.department?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesSearch;
-  });
+      // Department filter
+      const matchesDepartment = !departmentFilter || student.department === departmentFilter;
+
+      // Semester filter
+      const matchesSemester = !semesterFilter || student.semester === semesterFilter;
+
+      // CGPA filter
+      const matchesCGPA = !cgpaFilter || (() => {
+        const cgpa = parseFloat(student.cgpa) || 0;
+        switch (cgpaFilter) {
+          case 'high': return cgpa >= 3.5;
+          case 'medium': return cgpa >= 3.0 && cgpa < 3.5;
+          case 'low': return cgpa < 3.0;
+          default: return true;
+        }
+      })();
+
+      return matchesSearch && matchesDepartment && matchesSemester && matchesCGPA;
+    });
+  }, [students, searchQuery, departmentFilter, semesterFilter, cgpaFilter]);
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery("");
+    setDepartmentFilter("");
+    setSemesterFilter("");
+    setCgpaFilter("");
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery || departmentFilter || semesterFilter || cgpaFilter;
 
   const formatDate = (dateString) => {
     if (!dateString) return "Never";
@@ -117,33 +169,138 @@ export default function StudentsPage() {
           </p>
         </div>
 
-        {/* Search */}
-        <div className="mb-6">
+        {/* Search and Filters */}
+        <div className="mb-6 space-y-4">
+          {/* Search Bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search students by name, ID, or email..."
+              placeholder="Search students by name, ID, email, or department..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
           </div>
+
+          {/* Filter Controls */}
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex-1 min-w-[200px]">
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filterOptions.departments.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      {dept}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1 min-w-[150px]">
+              <Select value={semesterFilter} onValueChange={setSemesterFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filterOptions.semesters.map((semester) => (
+                    <SelectItem key={semester} value={semester}>
+                      {semester}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1 min-w-[150px]">
+              <Select value={cgpaFilter} onValueChange={setCgpaFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by CGPA" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filterOptions.cgpaRanges.map((range) => (
+                    <SelectItem key={range.value} value={range.value}>
+                      {range.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                onClick={clearFilters}
+                className="whitespace-nowrap"
+              >
+                Clear Filters
+              </Button>
+            )}
+          </div>
+
+          {/* Filter Summary */}
+          {hasActiveFilters && (
+            <div className="text-sm text-gray-600">
+              Showing {filteredStudents.length} of {students.length} students
+              {searchQuery && ` matching "${searchQuery}"`}
+            </div>
+          )}
         </div>
 
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-[#0056b3]" />
+            <span className="ml-2 text-gray-600">Loading students...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {isError && (
+          <div className="text-center py-12">
+            <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Failed to load students
+            </h3>
+            <p className="text-gray-500 mb-4">
+              {error?.response?.data?.error?.message || "Something went wrong while fetching student data."}
+            </p>
+            <Button 
+              onClick={() => refetch()}
+              className="bg-[#0056b3] hover:bg-[#004494]"
+            >
+              Try Again
+            </Button>
+          </div>
+        )}
+
         {/* Students Grid */}
-        {filteredStudents.length === 0 ? (
+        {!isLoading && !isError && filteredStudents.length === 0 && (
           <div className="text-center py-12">
             <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               No students found
             </h3>
             <p className="text-gray-500">
-              {searchQuery
-                ? "Try adjusting your search criteria"
+              {hasActiveFilters
+                ? "Try adjusting your search criteria or filters"
                 : "No students assigned yet"}
             </p>
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                onClick={clearFilters}
+                className="mt-4"
+              >
+                Clear All Filters
+              </Button>
+            )}
           </div>
-        ) : (
+        )}
+
+        {!isLoading && !isError && filteredStudents.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredStudents.map((student) => (
               <Card
@@ -161,7 +318,7 @@ export default function StudentsPage() {
                           {student.name}
                         </h3>
                         <p className="text-sm text-gray-500">
-                          {student.studentId}
+                          {student.studentId || 'N/A'}
                         </p>
                       </div>
                     </div>
@@ -169,45 +326,56 @@ export default function StudentsPage() {
 
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Email:</span>
+                      <span className="text-gray-900 truncate">
+                        {student.email}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Department:</span>
                       <span className="text-gray-900">
-                        {student.department}
+                        {student.department || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Semester:</span>
-                      <span className="text-gray-900">{student.semester}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">CGPA:</span>
-                      <span
-                        className={`font-medium ${getCGPAColor(student.cgpa)}`}
-                      >
-                        {student.cgpa.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Last Session:</span>
-                      <span className="text-gray-900">
-                        {formatDate(student.lastSession)}
-                      </span>
-                    </div>
+                    {student.semester && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Semester:</span>
+                        <span className="text-gray-900">{student.semester}</span>
+                      </div>
+                    )}
+                    {student.cgpa && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">CGPA:</span>
+                        <span
+                          className={`font-medium ${getCGPAColor(student.cgpa)}`}
+                        >
+                          {parseFloat(student.cgpa).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {student.lastSession && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Last Session:</span>
+                        <span className="text-gray-900">
+                          {formatDate(student.lastSession)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Total Sessions:</span>
                       <span className="text-gray-900">
-                        {student.totalSessions}
+                        {student.totalSessions || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Status:</span>
+                      <span className={`font-medium ${(student.isActive !== false) ? 'text-green-600' : 'text-red-600'}`}>
+                        {(student.isActive !== false) ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex space-x-2 mb-2">
-                    <Button
-                      size="sm"
-                      className="bg-[#0056b3] hover:bg-[#004494] flex-1"
-                      onClick={() => handleViewDetails(student)}
-                    >
-                      View Details
-                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -216,16 +384,13 @@ export default function StudentsPage() {
                     >
                       Message
                     </Button>
-                  </div>
-
-                  <div>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full border-[#ffbc3b] text-[#ffbc3b] hover:bg-[#ffbc3b] hover:text-white"
-                      onClick={() => handleViewNotes(student)}
+                      className="flex-1 border-[#ffbc3b] text-[#ffbc3b] hover:bg-[#ffbc3b] hover:text-white"
+                      onClick={() => handleViewProfile(student)}
                     >
-                      View Notes
+                      View Profile
                     </Button>
                   </div>
                 </CardContent>

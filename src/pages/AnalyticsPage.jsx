@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   TrendingUp,
   BarChart3,
@@ -10,6 +10,8 @@ import {
   Download,
   Filter,
   RefreshCw,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,166 +24,90 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  useDashboardStats,
+  useAppointmentAnalytics,
+  useStudentAnalytics,
+  useCounselorAnalytics,
+} from "@/hooks/useAnalytics";
 
 export default function AnalyticsPage() {
+  const { user } = useAuth();
   const [selectedTimeRange, setSelectedTimeRange] = useState("6months");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [selectedCounselor, setSelectedCounselor] = useState("all");
 
-  // Mock analytics data - replace with actual API calls
-  const analyticsData = {
-    overview: {
-      totalStudents: 342,
-      activeStudents: 298,
-      totalCounselors: 8,
-      activeCounselors: 7,
-      totalAppointments: 1247,
-      completedAppointments: 1156,
-      averageSessionDuration: 45,
-      studentSatisfaction: 4.7,
-      responseTime: 2.4,
-      utilizationRate: 87,
-    },
+  // Check if user has access to analytics (chairperson or admin only)
+  const hasAnalyticsAccess = user?.role === "chairperson" || user?.role === "admin";
+  
+  // Debug log to verify user role
+  console.log("Current user role:", user?.role, "Has access:", hasAnalyticsAccess);
 
-    departmentMetrics: [
-      {
-        department: "Computer Science",
-        students: 89,
-        counselors: 2,
-        appointments: 342,
-        satisfaction: 4.8,
-      },
-      {
-        department: "Electrical Engineering",
-        students: 76,
-        counselors: 2,
-        appointments: 298,
-        satisfaction: 4.6,
-      },
-      {
-        department: "Mechanical Engineering",
-        students: 68,
-        counselors: 1,
-        appointments: 245,
-        satisfaction: 4.5,
-      },
-      {
-        department: "Civil Engineering",
-        students: 54,
-        counselors: 1,
-        appointments: 189,
-        satisfaction: 4.7,
-      },
-      {
-        department: "Business Administration",
-        students: 55,
-        counselors: 2,
-        appointments: 173,
-        satisfaction: 4.9,
-      },
-    ],
+  // Calculate date filters based on selected time range
+  const dateFilters = useMemo(() => {
+    const now = new Date();
+    let startDate, endDate;
 
-    monthlyTrends: [
-      {
-        month: "Jan",
-        appointments: 89,
-        students: 45,
-        completion: 92,
-        satisfaction: 4.5,
-      },
-      {
-        month: "Feb",
-        appointments: 102,
-        students: 58,
-        completion: 94,
-        satisfaction: 4.6,
-      },
-      {
-        month: "Mar",
-        appointments: 125,
-        students: 67,
-        completion: 89,
-        satisfaction: 4.4,
-      },
-      {
-        month: "Apr",
-        appointments: 143,
-        students: 78,
-        completion: 96,
-        satisfaction: 4.8,
-      },
-      {
-        month: "May",
-        appointments: 156,
-        students: 82,
-        completion: 93,
-        satisfaction: 4.7,
-      },
-      {
-        month: "Jun",
-        appointments: 178,
-        students: 95,
-        completion: 95,
-        satisfaction: 4.9,
-      },
-    ],
+    switch (selectedTimeRange) {
+      case "1month":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        break;
+      case "3months":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+        break;
+      case "6months":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+        break;
+      case "1year":
+        startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    }
 
-    counselorPerformance: [
-      {
-        id: "1",
-        name: "Dr. Sarah Ahmed",
-        department: "Psychology",
-        studentsAssigned: 45,
-        appointmentsCompleted: 156,
-        avgSessionDuration: 48,
-        satisfaction: 4.9,
-      },
-      {
-        id: "2",
-        name: "Prof. Ahmad Hassan",
-        department: "Academic Affairs",
-        studentsAssigned: 38,
-        appointmentsCompleted: 134,
-        avgSessionDuration: 42,
-        satisfaction: 4.6,
-      },
-      {
-        id: "3",
-        name: "Dr. Fatima Sheikh",
-        department: "Career Services",
-        studentsAssigned: 41,
-        appointmentsCompleted: 145,
-        avgSessionDuration: 45,
-        satisfaction: 4.8,
-      },
-      {
-        id: "4",
-        name: "Dr. Ali Khan",
-        department: "Mental Health",
-        studentsAssigned: 35,
-        appointmentsCompleted: 98,
-        avgSessionDuration: 52,
-        satisfaction: 4.5,
-      },
-    ],
+    endDate = now;
 
-    appointmentTypes: [
-      { type: "Academic Guidance", count: 445, percentage: 36, trend: "+12%" },
-      { type: "Career Counseling", count: 378, percentage: 30, trend: "+8%" },
-      {
-        type: "Personal Development",
-        count: 298,
-        percentage: 24,
-        trend: "+15%",
-      },
-      {
-        type: "Mental Health Support",
-        count: 126,
-        percentage: 10,
-        trend: "+22%",
-      },
-    ],
-  };
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      ...(selectedDepartment !== "all" && { department: selectedDepartment }),
+      ...(selectedCounselor !== "all" && { counselorId: selectedCounselor }),
+    };
+  }, [selectedTimeRange, selectedDepartment, selectedCounselor]);
+
+  // Fetch analytics data using React Query hooks
+  const {
+    data: dashboardData,
+    isLoading: dashboardLoading,
+    error: dashboardError,
+    refetch: refetchDashboard,
+  } = useDashboardStats(dateFilters);
+
+  const {
+    data: appointmentData,
+    isLoading: appointmentLoading,
+    error: appointmentError,
+  } = useAppointmentAnalytics(dateFilters);
+
+  const {
+    data: studentData,
+    isLoading: studentLoading,
+    error: studentError,
+  } = useStudentAnalytics(dateFilters);
+
+  const {
+    data: counselorData,
+    isLoading: counselorLoading,
+    error: counselorError,
+  } = useCounselorAnalytics(dateFilters);
+
+  // Loading state
+  const isLoading = dashboardLoading || appointmentLoading || studentLoading || counselorLoading;
+
+  // Error state
+  const hasError = dashboardError || appointmentError || studentError || counselorError;
 
   const timeRanges = [
     { value: "1month", label: "Last Month" },
@@ -223,9 +149,23 @@ export default function AnalyticsPage() {
   };
 
   const refreshData = () => {
-    // Implementation for refreshing analytics data
-    console.log("Refreshing analytics data...");
+    refetchDashboard();
   };
+
+  // If user doesn't have access, show access denied
+  if (!hasAnalyticsAccess) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600">
+            You don't have permission to view analytics. Only chairpersons and admins can access this page.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -246,9 +186,14 @@ export default function AnalyticsPage() {
             <Button
               variant="outline"
               onClick={refreshData}
+              disabled={isLoading}
               className="flex items-center space-x-2"
             >
-              <RefreshCw className="h-4 w-4" />
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
               <span>Refresh</span>
             </Button>
             <Button
@@ -260,6 +205,16 @@ export default function AnalyticsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {hasError && (
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Failed to load analytics data. Please try refreshing the page.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-8 p-4 bg-white rounded-lg border">
@@ -327,10 +282,14 @@ export default function AnalyticsPage() {
                     Total Students
                   </p>
                   <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {analyticsData.overview.totalStudents}
+                    {isLoading ? (
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : (
+                      dashboardData?.data?.overview?.totalStudents || 0
+                    )}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
-                    {analyticsData.overview.activeStudents} active
+                    {dashboardData?.data?.overview?.totalCounselors || 0} counselors
                   </p>
                 </div>
                 <div className="bg-blue-500 p-3 rounded-lg">
@@ -348,15 +307,14 @@ export default function AnalyticsPage() {
                     Appointments
                   </p>
                   <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {analyticsData.overview.totalAppointments}
+                    {isLoading ? (
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : (
+                      dashboardData?.data?.appointments?.total || 0
+                    )}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
-                    {Math.round(
-                      (analyticsData.overview.completedAppointments /
-                        analyticsData.overview.totalAppointments) *
-                        100
-                    )}
-                    % completion rate
+                    {dashboardData?.data?.appointments?.completionRate || 0}% completion rate
                   </p>
                 </div>
                 <div className="bg-green-500 p-3 rounded-lg">
@@ -371,12 +329,18 @@ export default function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                    Avg. Session Duration
+                    Total Messages
                   </p>
                   <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {analyticsData.overview.averageSessionDuration}m
+                    {isLoading ? (
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : (
+                      dashboardData?.data?.overview?.totalMessages || 0
+                    )}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">Per session</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {dashboardData?.data?.overview?.totalConversations || 0} conversations
+                  </p>
                 </div>
                 <div className="bg-yellow-500 p-3 rounded-lg">
                   <Clock className="h-6 w-6 text-white" />
@@ -390,12 +354,16 @@ export default function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                    Satisfaction Rate
+                    Student Notes
                   </p>
                   <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {analyticsData.overview.studentSatisfaction}/5
+                    {isLoading ? (
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : (
+                      dashboardData?.data?.overview?.totalNotes || 0
+                    )}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">Student feedback</p>
+                  <p className="text-sm text-gray-500 mt-1">Session notes</p>
                 </div>
                 <div className="bg-purple-500 p-3 rounded-lg">
                   <Award className="h-6 w-6 text-white" />
@@ -405,11 +373,12 @@ export default function AnalyticsPage() {
           </Card>
         </div>
 
-        {/* Main Analytics Tabs - Removed Students, Trends, and Insights for chairperson */}
+        {/* Main Analytics Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="counselors">Counselors</TabsTrigger>
+            <TabsTrigger value="students">Students</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -420,41 +389,40 @@ export default function AnalyticsPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <BarChart3 className="h-5 w-5 text-[#0056b3]" />
-                    <span>Department Performance</span>
+                    <span>Department Statistics</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {analyticsData.departmentMetrics.map((dept, index) => (
-                      <div key={index} className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-900">
-                            {dept.department}
-                          </span>
-                          <div className="flex items-center space-x-4 text-sm text-gray-600">
-                            <span>{dept.students} students</span>
-                            <span>{dept.appointments} sessions</span>
-                            <span
-                              className={getPerformanceColor(
-                                dept.satisfaction,
-                                "satisfaction"
-                              )}
-                            >
-                              {dept.satisfaction}/5
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {dashboardData?.data?.departmentStats?.map((dept, index) => (
+                        <div key={index} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-900">
+                              {dept.department}
                             </span>
+                            <div className="flex items-center space-x-4 text-sm text-gray-600">
+                              <span>{dept._count.id} students</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-[#0056b3] h-2 rounded-full"
+                              style={{
+                                width: `${Math.min((dept._count.id / (dashboardData?.data?.overview?.totalStudents || 1)) * 100, 100)}%`,
+                              }}
+                            ></div>
                           </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-[#0056b3] h-2 rounded-full"
-                            style={{
-                              width: `${(dept.appointments / 350) * 100}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      )) || (
+                        <p className="text-gray-500 text-center py-4">No department data available</p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -467,90 +435,104 @@ export default function AnalyticsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {analyticsData.appointmentTypes.map((type, index) => (
-                      <div key={index} className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="font-medium text-gray-900">
-                            {type.type}
-                          </span>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-gray-600">
-                              {type.count} ({type.percentage}%)
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className="text-green-600 border-green-600"
-                            >
-                              {type.trend}
-                            </Badge>
+                  {appointmentLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {appointmentData?.data?.typeDistribution?.map((type, index) => {
+                        const total = appointmentData?.data?.summary?.totalAppointments || 1;
+                        const percentage = Math.round((type.count / total) * 100);
+                        return (
+                          <div key={index} className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="font-medium text-gray-900">
+                                {type.type}
+                              </span>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-gray-600">
+                                  {type.count} ({percentage}%)
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-[#0056b3] h-2 rounded-full"
+                                style={{ width: `${percentage}%` }}
+                              ></div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-[#0056b3] h-2 rounded-full"
-                            style={{ width: `${type.percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        );
+                      }) || (
+                        <p className="text-gray-500 text-center py-4">No appointment type data available</p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Monthly Trends */}
+            {/* Appointment Trends */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <TrendingUp className="h-5 w-5 text-[#0056b3]" />
-                  <span>Monthly Trends</span>
+                  <span>Appointment Trends</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                  {analyticsData.monthlyTrends.map((month, index) => (
-                    <div
-                      key={index}
-                      className="text-center p-4 bg-gray-50 rounded-lg"
-                    >
-                      <h4 className="font-medium text-gray-900 mb-2">
-                        {month.month}
-                      </h4>
-                      <div className="space-y-1 text-sm">
-                        <div>
-                          <span className="text-gray-500">Appointments:</span>
-                          <span className="font-medium text-gray-900 ml-1">
-                            {month.appointments}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Students:</span>
-                          <span className="font-medium text-gray-900 ml-1">
-                            {month.students}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Completion:</span>
-                          <span className="font-medium text-green-600 ml-1">
-                            {month.completion}%
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Rating:</span>
-                          <span className="font-medium text-purple-600 ml-1">
-                            {month.satisfaction}
-                          </span>
+                {appointmentLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    {appointmentData?.data?.trends?.slice(-6).map((trend, index) => (
+                      <div
+                        key={index}
+                        className="text-center p-4 bg-gray-50 rounded-lg"
+                      >
+                        <h4 className="font-medium text-gray-900 mb-2">
+                          {trend.period}
+                        </h4>
+                        <div className="space-y-1 text-sm">
+                          <div>
+                            <span className="text-gray-500">Total:</span>
+                            <span className="font-medium text-gray-900 ml-1">
+                              {trend.total}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Completed:</span>
+                            <span className="font-medium text-green-600 ml-1">
+                              {trend.completed}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Pending:</span>
+                            <span className="font-medium text-yellow-600 ml-1">
+                              {trend.pending}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Cancelled:</span>
+                            <span className="font-medium text-red-600 ml-1">
+                              {trend.cancelled}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    )) || (
+                      <p className="text-gray-500 text-center py-4 col-span-6">No trend data available</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Counselors Tab - Removed Response Time and Utilization */}
+          {/* Counselors Tab */}
           <TabsContent value="counselors" className="space-y-6">
             <Card>
               <CardHeader>
@@ -560,67 +542,338 @@ export default function AnalyticsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  {analyticsData.counselorPerformance.map((counselor) => (
-                    <div
-                      key={counselor.id}
-                      className="p-6 border rounded-lg hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <h3 className="font-semibold text-gray-900">
-                            {counselor.name}
-                          </h3>
-                          <p className="text-sm text-gray-500">
-                            {counselor.department}
-                          </p>
-                        </div>
-                        <Badge
-                          className={getPerformanceColor(
-                            counselor.satisfaction,
-                            "satisfaction"
-                          )}
-                        >
-                          {counselor.satisfaction}/5 Rating
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-500">Students</p>
-                          <p className="font-medium text-gray-900">
-                            {counselor.studentsAssigned}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Sessions</p>
-                          <p className="font-medium text-gray-900">
-                            {counselor.appointmentsCompleted}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Avg. Duration</p>
-                          <p className="font-medium text-gray-900">
-                            {counselor.avgSessionDuration}m
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Satisfaction</p>
-                          <p
-                            className={`font-medium ${getPerformanceColor(
-                              counselor.satisfaction,
-                              "satisfaction"
-                            )}`}
+                {counselorLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {counselorData?.data?.counselorMetrics?.map((counselor) => (
+                      <div
+                        key={counselor.id}
+                        className="p-6 border rounded-lg hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="font-semibold text-gray-900">
+                              {counselor.name}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              {counselor.department}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              ID: {counselor.employeeId}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={`${
+                              parseFloat(counselor.metrics.completionRate) >= 80
+                                ? "text-green-600 border-green-600"
+                                : parseFloat(counselor.metrics.completionRate) >= 60
+                                ? "text-yellow-600 border-yellow-600"
+                                : "text-red-600 border-red-600"
+                            }`}
                           >
-                            {counselor.satisfaction}/5
-                          </p>
+                            {counselor.metrics.completionRate}% Completion
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-500">Total Appointments</p>
+                            <p className="font-medium text-gray-900">
+                              {counselor.metrics.totalAppointments}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Completed</p>
+                            <p className="font-medium text-green-600">
+                              {counselor.metrics.completedAppointments}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Cancelled</p>
+                            <p className="font-medium text-red-600">
+                              {counselor.metrics.cancelledAppointments}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Notes Written</p>
+                            <p className="font-medium text-gray-900">
+                              {counselor.metrics.totalNotes}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Notes/Session</p>
+                            <p className="font-medium text-blue-600">
+                              {counselor.metrics.notesPerAppointment}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Performance indicators */}
+                        <div className="mt-4 flex items-center space-x-4 text-xs">
+                          <div className="flex items-center space-x-1">
+                            <div
+                              className={`w-2 h-2 rounded-full ${
+                                parseFloat(counselor.metrics.completionRate) >= 80
+                                  ? "bg-green-500"
+                                  : parseFloat(counselor.metrics.completionRate) >= 60
+                                  ? "bg-yellow-500"
+                                  : "bg-red-500"
+                              }`}
+                            ></div>
+                            <span className="text-gray-500">
+                              Completion Rate: {counselor.metrics.completionRate}%
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            <div
+                              className={`w-2 h-2 rounded-full ${
+                                parseFloat(counselor.metrics.cancellationRate) <= 10
+                                  ? "bg-green-500"
+                                  : parseFloat(counselor.metrics.cancellationRate) <= 20
+                                  ? "bg-yellow-500"
+                                  : "bg-red-500"
+                              }`}
+                            ></div>
+                            <span className="text-gray-500">
+                              Cancellation Rate: {counselor.metrics.cancellationRate}%
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    )) || (
+                      <p className="text-gray-500 text-center py-8">No counselor data available</p>
+                    )}
+
+                    {/* Summary Statistics */}
+                    {counselorData?.data?.summary && (
+                      <div className="mt-8 p-6 bg-gray-50 rounded-lg">
+                        <h4 className="font-semibold text-gray-900 mb-4">Summary Statistics</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div className="text-center">
+                            <p className="text-gray-500">Total Counselors</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {counselorData.data.summary.totalCounselors}
+                            </p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-gray-500">Avg. Appointments</p>
+                            <p className="text-2xl font-bold text-blue-600">
+                              {counselorData.data.summary.averageAppointments}
+                            </p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-gray-500">Avg. Completion Rate</p>
+                            <p className="text-2xl font-bold text-green-600">
+                              {counselorData.data.summary.averageCompletionRate}%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Students Tab */}
+          <TabsContent value="students" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* Student Engagement Overview */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Users className="h-5 w-5 text-[#0056b3]" />
+                    <span>Student Engagement Overview</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {studentLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <p className="text-2xl font-bold text-blue-600">
+                          {studentData?.data?.overview?.totalStudents || 0}
+                        </p>
+                        <p className="text-sm text-gray-600">Total Students</p>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <p className="text-2xl font-bold text-green-600">
+                          {studentData?.data?.overview?.activeStudents || 0}
+                        </p>
+                        <p className="text-sm text-gray-600">Active Students</p>
+                      </div>
+                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                        <p className="text-2xl font-bold text-purple-600">
+                          {studentData?.data?.overview?.engagementRate || 0}%
+                        </p>
+                        <p className="text-sm text-gray-600">Engagement Rate</p>
+                      </div>
+                      <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                        <p className="text-2xl font-bold text-yellow-600">
+                          {studentData?.data?.overview?.averageAppointments || 0}
+                        </p>
+                        <p className="text-sm text-gray-600">Avg. Appointments</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Department Engagement */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <BarChart3 className="h-5 w-5 text-[#0056b3]" />
+                    <span>Department Engagement</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {studentLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {studentData?.data?.departmentEngagement?.map((dept, index) => (
+                        <div key={index} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-900">
+                              {dept.department}
+                            </span>
+                            <div className="flex items-center space-x-4 text-sm text-gray-600">
+                              <span>{dept.studentCount} students</span>
+                              <span>{dept.totalAppointments} appointments</span>
+                              <span className="text-blue-600">
+                                {dept.averageEngagement} avg score
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-[#0056b3] h-2 rounded-full"
+                              style={{
+                                width: `${Math.min((dept.averageEngagement / 10) * 100, 100)}%`,
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      )) || (
+                        <p className="text-gray-500 text-center py-4">No department engagement data available</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Top Engaged Students */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Award className="h-5 w-5 text-[#0056b3]" />
+                  <span>Most Engaged Students</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {studentLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {studentData?.data?.studentMetrics?.slice(0, 10).map((student, index) => (
+                      <div
+                        key={student.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:shadow-sm transition-shadow"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-gray-900">{student.name}</h4>
+                            <p className="text-sm text-gray-500">
+                              {student.studentId} • {student.department}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="grid grid-cols-4 gap-4 text-sm">
+                            <div className="text-center">
+                              <p className="font-medium text-gray-900">
+                                {student.metrics.totalAppointments}
+                              </p>
+                              <p className="text-xs text-gray-500">Appointments</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-medium text-green-600">
+                                {student.metrics.completionRate}%
+                              </p>
+                              <p className="text-xs text-gray-500">Completion</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-medium text-blue-600">
+                                {student.metrics.totalMessages}
+                              </p>
+                              <p className="text-xs text-gray-500">Messages</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-medium text-purple-600">
+                                {student.metrics.engagementScore}
+                              </p>
+                              <p className="text-xs text-gray-500">Score</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )) || (
+                      <p className="text-gray-500 text-center py-8">No student engagement data available</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Low Engagement Students */}
+            {studentData?.data?.lowEngagementStudents?.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                    <span>Students Needing Attention</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {studentData.data.lowEngagementStudents.map((student) => (
+                      <div
+                        key={student.id}
+                        className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg"
+                      >
+                        <div>
+                          <h4 className="font-medium text-gray-900">{student.name}</h4>
+                          <p className="text-sm text-gray-500">
+                            {student.studentId} • {student.department}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-red-600 font-medium">No recent activity</p>
+                          <p className="text-xs text-gray-500">Consider reaching out</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </main>

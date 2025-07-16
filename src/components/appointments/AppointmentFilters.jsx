@@ -14,33 +14,44 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useCounselors } from "@/hooks/useUsers";
 
 export default function AppointmentFilters({
   filters,
   onFiltersChange,
   userRole,
 }) {
+  // Fetch counselors for filter options
+  const { data: counselorsData, isLoading: counselorsLoading } = useCounselors();
+  
+  // Ensure counselors is always an array
+  const counselors = Array.isArray(counselorsData) 
+    ? counselorsData 
+    : counselorsData?.counselors || counselorsData?.data || [];
+
   const statusOptions = [
     { value: "all", label: "All Status" },
-    { value: "scheduled", label: "Scheduled" },
-    { value: "pending", label: "Pending" },
-    { value: "completed", label: "Completed" },
-    { value: "cancelled", label: "Cancelled" },
+    { value: "SCHEDULED", label: "Scheduled" },
+    { value: "PENDING", label: "Pending" },
+    { value: "COMPLETED", label: "Completed" },
+    { value: "CANCELLED", label: "Cancelled" },
   ];
 
   const typeOptions = [
     { value: "all", label: "All Types" },
-    { value: "counseling", label: "General Counseling" },
-    { value: "academic", label: "Academic Guidance" },
-    { value: "career", label: "Career Counseling" },
-    { value: "personal", label: "Personal Issues" },
+    { value: "COUNSELING", label: "General Counseling" },
+    { value: "ACADEMIC", label: "Academic Guidance" },
+    { value: "CAREER", label: "Career Counseling" },
+    { value: "PERSONAL", label: "Personal Issues" },
   ];
 
+  // Build counselor options from real data
   const counselorOptions = [
     { value: "all", label: "All Counselors" },
-    { value: "1", label: "Dr. Sarah Ahmed" },
-    { value: "2", label: "Prof. Ahmad Hassan" },
-    { value: "3", label: "Dr. Fatima Sheikh" },
+    ...counselors.map(counselor => ({
+      value: counselor.id,
+      label: counselor.name
+    }))
   ];
 
   const updateFilter = (key, value) => {
@@ -153,11 +164,12 @@ export default function AppointmentFilters({
               <div className="space-y-2">
                 <Label>Counselor</Label>
                 <Select
-                  value={filters.counselor || "all"}
-                  onValueChange={(value) => updateFilter("counselor", value)}
+                  value={filters.counselorId || "all"}
+                  onValueChange={(value) => updateFilter("counselorId", value)}
+                  disabled={counselorsLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={counselorsLoading ? "Loading..." : "Select counselor"} />
                   </SelectTrigger>
                   <SelectContent>
                     {counselorOptions.map((option) => (
@@ -225,12 +237,12 @@ export default function AppointmentFilters({
               </Button>
             </div>
           )}
-          {filters.counselor && (
+          {filters.counselorId && (
             <div className="flex items-center space-x-1 bg-purple-100 text-purple-800 px-2 py-1 rounded-md text-sm">
               <span>
                 Counselor:{" "}
                 {
-                  counselorOptions.find((c) => c.value === filters.counselor)
+                  counselorOptions.find((c) => c.value === filters.counselorId)
                     ?.label
                 }
               </span>
@@ -238,7 +250,7 @@ export default function AppointmentFilters({
                 variant="ghost"
                 size="sm"
                 className="h-4 w-4 p-0 hover:bg-purple-200"
-                onClick={() => updateFilter("counselor", "all")}
+                onClick={() => updateFilter("counselorId", "all")}
               >
                 <X className="h-3 w-3" />
               </Button>

@@ -1,0 +1,1 @@
+export { default as StudentNotesCard } from './StudentNotesCard';

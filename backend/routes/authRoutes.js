@@ -11,7 +11,6 @@ const prisma = new PrismaClient();
 // =========================================================================
 
 router.get("/me", async (req, res) => {
-  console.log("dangee");
 
   try {
     // Get token from header
@@ -53,7 +52,7 @@ router.post("/register", async (req, res) => {
     req.body;
 
   try {
-    if (!["STUDENT", "COUNSELOR", "CHAIRPERSON"].includes(role.toUpperCase())) {
+    if (!["STUDENT", "COUNSELOR", "CHAIRPERSON", 'ADMIN'].includes(role.toUpperCase())) {
       return res.status(400).json({ message: "Invalid role specified" });
     }
 
@@ -163,6 +162,92 @@ router.post("/logout", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server Error" });
+  }
+});
+
+// =========================================================================
+
+// Change password (All authenticated users)
+router.post("/change-password", async (req, res) => {
+  try {
+    // Get token from header
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!token) {
+      return res
+        .status(401)
+        .json({ message: "No token, authorization denied" });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Check if user still exists
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+    });
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Validation
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Current password and new password are required"
+        }
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "New password must be at least 6 characters long"
+        }
+      });
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Current password is incorrect"
+        }
+      });
+    }
+
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedNewPassword }
+    });
+
+    res.json({
+      success: true,
+      message: "Password changed successfully"
+    });
+  } catch (error) {
+    console.error("Error changing password:", error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: "SERVER_ERROR",
+        message: "Failed to change password"
+      }
+    });
   }
 });
 

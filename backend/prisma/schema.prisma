@@ -16,19 +16,29 @@ model User {
   department String
   studentId  String?
   employeeId String?
-
+  isActive   Boolean @default(true)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relationships
   StudentAppointments   Appointment[]  @relation("StudentAppointments")
   CounselorAppointments Appointment[]  @relation("CounselorAppointments")
   Availability          Availability[]
+  SentMessages         Message[]      @relation("SentMessages")
+  ReceivedMessages     Message[]      @relation("ReceivedMessages")
+  ConversationParticipants ConversationParticipant[]
+  StudentNotes         StudentNote[]  @relation("StudentNotes")
+  CounselorNotes       StudentNote[]  @relation("CounselorNotes")
+  Notifications        Notification[]
+  UploadedFiles        SharedFile[]
 }
 
 enum Role {
   STUDENT
   COUNSELOR
   CHAIRPERSON
+  ADMIN
 }
 
 model Appointment {
@@ -80,4 +90,93 @@ enum DayOfWeek {
   FRIDAY
   SATURDAY
   SUNDAY
+}
+
+model Conversation {
+  id           String @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  participants ConversationParticipant[]
+  messages     Message[]
+  sharedFiles  SharedFile[]
+}
+
+model ConversationParticipant {
+  id             String @id @default(uuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  user          User @relation(fields: [userId], references: [id])
+  
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  content        String
+  senderId       String
+  receiverId     String   // <-- Add this
+  conversationId String
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  sender         User      @relation("SentMessages", fields: [senderId], references: [id])
+  receiver       User      @relation("ReceivedMessages", fields: [receiverId], references: [id]) // <-- Add this
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+
+model SharedFile {
+  id             String @id @default(uuid())
+  filename       String
+  originalName   String
+  mimeType       String
+  size           Int
+  path           String
+  conversationId String
+  uploadedById   String
+  createdAt      DateTime @default(now())
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  uploadedBy     User @relation(fields: [uploadedById], references: [id])
+}
+
+model StudentNote {
+  id          String @id @default(uuid())
+  studentId   String
+  counselorId String
+  title       String
+  content     String
+  sessionDate DateTime
+  isPrivate   Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  student     User @relation("StudentNotes", fields: [studentId], references: [id])
+  counselor   User @relation("CounselorNotes", fields: [counselorId], references: [id])
+}
+
+model Notification {
+  id        String @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+  
+  user      User @relation(fields: [userId], references: [id])
+}
+
+enum NotificationType {
+  APPOINTMENT_BOOKED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  MESSAGE_RECEIVED
+  FILE_SHARED
+  SYSTEM_NOTIFICATION
 }

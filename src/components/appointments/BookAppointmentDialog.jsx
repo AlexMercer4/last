@@ -18,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCounselors, useStudents } from "@/hooks/useUsers";
+import { useCounselorAvailability } from "@/hooks/useAppointments";
 
 export default function BookAppointmentDialog({
   open,
@@ -34,66 +36,40 @@ export default function BookAppointmentDialog({
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Mock data - replace with actual API calls
-  const counselors = [
-    {
-      id: "1",
-      name: "Dr. Sarah Ahmed",
-      email: "sarah@university.edu",
-      role: "counselor",
-      department: "Psychology",
-    },
-    {
-      id: "2",
-      name: "Prof. Ahmad Hassan",
-      email: "ahmad@university.edu",
-      role: "counselor",
-      department: "Academic Affairs",
-    },
-    {
-      id: "3",
-      name: "Dr. Fatima Sheikh",
-      email: "fatima@university.edu",
-      role: "counselor",
-      department: "Career Services",
-    },
+  // Fetch real data from API
+  const { data: counselorsData, isLoading: counselorsLoading } = useCounselors();
+  const { data: studentsData, isLoading: studentsLoading } = useStudents();
+  const { data: availabilityData, isLoading: availabilityLoading } = useCounselorAvailability(
+    selectedCounselor, 
+    selectedDate
+  );
+
+  // Ensure data is always an array
+  const counselors = Array.isArray(counselorsData) 
+    ? counselorsData 
+    : counselorsData?.counselors || counselorsData?.data || [];
+    
+  const students = Array.isArray(studentsData) 
+    ? studentsData 
+    : studentsData?.students || studentsData?.data || [];
+
+  // Generate time slots based on availability or use default slots
+  const defaultTimeSlots = [
+    { time: "09:00", label: "09:00 AM", available: true },
+    { time: "10:00", label: "10:00 AM", available: true },
+    { time: "11:00", label: "11:00 AM", available: true },
+    { time: "14:00", label: "02:00 PM", available: true },
+    { time: "15:00", label: "03:00 PM", available: true },
+    { time: "16:00", label: "04:00 PM", available: true },
   ];
 
-  const students = [
-    {
-      id: "1",
-      name: "Ahmad Ali",
-      email: "ahmad.ali@student.edu",
-      role: "student",
-    },
-    {
-      id: "2",
-      name: "Fatima Khan",
-      email: "fatima.khan@student.edu",
-      role: "student",
-    },
-    {
-      id: "3",
-      name: "Hassan Ahmed",
-      email: "hassan.ahmed@student.edu",
-      role: "student",
-    },
-  ];
-
-  const timeSlots = [
-    { time: "09:00 AM", available: true },
-    { time: "10:00 AM", available: true },
-    { time: "11:00 AM", available: false },
-    { time: "02:00 PM", available: true },
-    { time: "03:00 PM", available: true },
-    { time: "04:00 PM", available: true },
-  ];
+  const timeSlots = availabilityData?.timeSlots || defaultTimeSlots;
 
   const appointmentTypes = [
-    { value: "counseling", label: "General Counseling" },
-    { value: "academic", label: "Academic Guidance" },
-    { value: "career", label: "Career Counseling" },
-    { value: "personal", label: "Personal Issues" },
+    { value: "COUNSELING", label: "General Counseling" },
+    { value: "ACADEMIC", label: "Academic Guidance" },
+    { value: "CAREER", label: "Career Counseling" },
+    { value: "PERSONAL", label: "Personal Issues" },
   ];
 
   const locations = [
@@ -108,15 +84,23 @@ export default function BookAppointmentDialog({
     e.preventDefault();
     setIsLoading(true);
 
+    // Calculate end time (assuming 1 hour duration by default)
+    const startTime = selectedTime;
+    const [hours, minutes] = startTime.split(':');
+    const startHour = parseInt(hours);
+    const endHour = startHour + 1;
+    const endTime = `${endHour.toString().padStart(2, '0')}:${minutes}`;
+
     const appointmentData = {
       date: selectedDate,
-      time: selectedTime,
-      counselor: userRole === "student" ? selectedCounselor : "current-user",
-      student: userRole === "counselor" ? selectedStudent : "current-user",
+      startTime: startTime,
+      endTime: endTime,
+      duration: 60, // 60 minutes default
+      counselorId: userRole === "student" ? selectedCounselor : null,
+      studentId: userRole === "counselor" ? selectedStudent : null,
       type: appointmentType,
       location,
       notes,
-      status: userRole === "student" ? "pending" : "scheduled",
     };
 
     try {
@@ -192,7 +176,7 @@ export default function BookAppointmentDialog({
                       value={slot.time}
                       disabled={!slot.available}
                     >
-                      {slot.time} {!slot.available && "(Unavailable)"}
+                      {slot.label || slot.time} {!slot.available && "(Unavailable)"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -210,9 +194,10 @@ export default function BookAppointmentDialog({
               <Select
                 value={selectedCounselor}
                 onValueChange={setSelectedCounselor}
+                disabled={counselorsLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select counselor" />
+                  <SelectValue placeholder={counselorsLoading ? "Loading counselors..." : "Select counselor"} />
                 </SelectTrigger>
                 <SelectContent>
                   {counselors.map((counselor) => (
@@ -232,9 +217,10 @@ export default function BookAppointmentDialog({
               <Select
                 value={selectedStudent}
                 onValueChange={setSelectedStudent}
+                disabled={studentsLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select student" />
+                  <SelectValue placeholder={studentsLoading ? "Loading students..." : "Select student"} />
                 </SelectTrigger>
                 <SelectContent>
                   {students.map((student) => (

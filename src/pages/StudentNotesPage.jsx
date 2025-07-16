@@ -10,6 +10,8 @@ import {
   EyeOff,
   Calendar,
   User,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -42,146 +44,70 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useStudentNotes, useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/useNotes";
+import { useUser } from "@/hooks/useUsers";
 
 export default function StudentNotesPage() {
   const { studentId } = useParams();
   const navigate = useNavigate();
 
-  const [notes, setNotes] = useState([]);
-  const [filteredNotes, setFilteredNotes] = useState([]);
+  // State for search and filtering
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterCategory, setFilterCategory] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
   const [noteToDelete, setNoteToDelete] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
 
   // Form state
+  const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
-  const [noteCategory, setNoteCategory] = useState("");
-  const [isPrivate, setIsPrivate] = useState(true);
+  const [sessionDate, setSessionDate] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
 
-  const noteCategories = [
-    { value: "academic", label: "Academic Progress" },
-    { value: "behavioral", label: "Behavioral Observation" },
-    { value: "career", label: "Career Guidance" },
-    { value: "personal", label: "Personal Development" },
-    { value: "attendance", label: "Attendance & Engagement" },
-    { value: "general", label: "General Notes" },
-  ];
-
-  // Mock student data - replace with actual API call
-  const studentData = {
-    id: studentId,
-    name:
-      studentId === "1"
-        ? "Ahmad Ali"
-        : studentId === "2"
-        ? "Fatima Khan"
-        : "Hassan Ahmed",
-    studentId:
-      studentId === "1"
-        ? "CS-2024-001"
-        : studentId === "2"
-        ? "EE-2024-015"
-        : "ME-2024-032",
-    department:
-      studentId === "1"
-        ? "Computer Science"
-        : studentId === "2"
-        ? "Electrical Engineering"
-        : "Mechanical Engineering",
-    semester: studentId === "1" ? "6th" : studentId === "2" ? "4th" : "8th",
+  // API hooks
+  const filters = {
+    search: searchQuery || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
   };
 
-  // Mock notes data - replace with actual API call
-  useEffect(() => {
-    const mockNotes = [
-      {
-        id: "1",
-        studentId: studentId || "1",
-        studentName: studentData.name,
-        category: "academic",
-        content:
-          "Student is showing excellent progress in programming courses. Particularly strong in data structures and algorithms. Recommended for advanced courses next semester.",
-        isPrivate: false,
-        createdAt: "2024-06-20T10:00:00Z",
-        updatedAt: "2024-06-20T10:00:00Z",
-        createdBy: "Dr. Sarah Ahmed",
-      },
-      {
-        id: "2",
-        studentId: studentId || "1",
-        studentName: studentData.name,
-        category: "career",
-        content:
-          "Discussed career opportunities in software development. Student expressed interest in full-stack development and AI/ML. Provided resources for internship applications.",
-        isPrivate: true,
-        createdAt: "2024-06-18T14:30:00Z",
-        updatedAt: "2024-06-18T14:30:00Z",
-        createdBy: "Dr. Sarah Ahmed",
-      },
-      {
-        id: "3",
-        studentId: studentId || "1",
-        studentName: studentData.name,
-        category: "personal",
-        content:
-          "Student mentioned feeling overwhelmed with course load. Discussed time management strategies and stress reduction techniques. Follow-up scheduled.",
-        isPrivate: true,
-        createdAt: "2024-06-15T11:15:00Z",
-        updatedAt: "2024-06-15T11:15:00Z",
-        createdBy: "Dr. Sarah Ahmed",
-      },
-      {
-        id: "4",
-        studentId: studentId || "1",
-        studentName: studentData.name,
-        category: "behavioral",
-        content:
-          "Student has been actively participating in class discussions and group projects. Shows good leadership qualities and helps fellow students.",
-        isPrivate: false,
-        createdAt: "2024-06-10T09:45:00Z",
-        updatedAt: "2024-06-10T09:45:00Z",
-        createdBy: "Prof. Ahmad Hassan",
-      },
-    ];
+  const {
+    data: notesResponse,
+    isLoading: isLoadingNotes,
+    isError: isNotesError,
+    error: notesError,
+    refetch: refetchNotes,
+  } = useStudentNotes(studentId, filters);
 
-    setNotes(mockNotes);
-  }, [studentId]);
+  const {
+    data: studentResponse,
+    isLoading: isLoadingStudent,
+    isError: isStudentError,
+  } = useUser(studentId);
 
-  // Filter notes based on search and category
-  useEffect(() => {
-    let filtered = notes;
+  const createNoteMutation = useCreateNote();
+  const updateNoteMutation = useUpdateNote();
+  const deleteNoteMutation = useDeleteNote();
 
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (note) =>
-          note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          note.category.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    if (filterCategory !== "all") {
-      filtered = filtered.filter((note) => note.category === filterCategory);
-    }
-
-    setFilteredNotes(filtered);
-  }, [notes, searchQuery, filterCategory]);
+  const notes = notesResponse?.data?.notes || [];
+  const studentData = notesResponse?.data?.student || studentResponse?.data;
 
   const handleAddNote = () => {
     setEditingNote(null);
+    setNoteTitle("");
     setNoteContent("");
-    setNoteCategory("");
-    setIsPrivate(true);
+    setSessionDate("");
+    setIsPrivate(false);
     setIsAddEditDialogOpen(true);
   };
 
   const handleEditNote = (note) => {
     setEditingNote(note);
+    setNoteTitle(note.title);
     setNoteContent(note.content);
-    setNoteCategory(note.category);
+    setSessionDate(note.sessionDate ? new Date(note.sessionDate).toISOString().split('T')[0] : "");
     setIsPrivate(note.isPrivate);
     setIsAddEditDialogOpen(true);
   };
@@ -192,50 +118,33 @@ export default function StudentNotesPage() {
   };
 
   const handleSaveNote = async () => {
-    if (!noteContent.trim() || !noteCategory) return;
+    if (!noteTitle.trim() || !noteContent.trim() || !sessionDate) return;
 
-    setIsLoading(true);
+    const noteData = {
+      title: noteTitle.trim(),
+      content: noteContent.trim(),
+      sessionDate: sessionDate,
+      isPrivate,
+    };
+
     try {
       if (editingNote) {
-        // Update existing note
-        const updatedNote = {
-          ...editingNote,
-          content: noteContent.trim(),
-          category: noteCategory,
-          isPrivate,
-          updatedAt: new Date().toISOString(),
-        };
-
-        setNotes((prev) =>
-          prev.map((note) => (note.id === editingNote.id ? updatedNote : note))
-        );
-        toast.success("Note updated successfully");
+        await updateNoteMutation.mutateAsync({
+          noteId: editingNote.id,
+          noteData,
+        });
       } else {
-        // Add new note
-        const newNote = {
-          id: Date.now().toString(),
-          studentId: studentId || "1",
-          studentName: studentData.name,
-          category: noteCategory,
-          content: noteContent.trim(),
-          isPrivate,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: "Dr. Sarah Ahmed",
-        };
-
-        setNotes((prev) => [newNote, ...prev]);
-        toast.success("Note added successfully");
+        await createNoteMutation.mutateAsync({
+          studentId,
+          noteData,
+        });
       }
 
       setIsAddEditDialogOpen(false);
       resetForm();
     } catch (error) {
-      console.log(error);
-
-      toast.error("Failed to save note. Please try again.");
-    } finally {
-      setIsLoading(false);
+      // Error handling is done in the mutation hooks
+      console.error("Error saving note:", error);
     }
   };
 
@@ -243,41 +152,24 @@ export default function StudentNotesPage() {
     if (!noteToDelete) return;
 
     try {
-      setNotes((prev) => prev.filter((note) => note.id !== noteToDelete.id));
-      toast.success("Note deleted successfully");
+      await deleteNoteMutation.mutateAsync(noteToDelete.id);
       setIsDeleteDialogOpen(false);
       setNoteToDelete(null);
     } catch (error) {
-      console.log(error);
-      toast.error("Failed to delete note. Please try again.");
+      // Error handling is done in the mutation hook
+      console.error("Error deleting note:", error);
     }
   };
 
   const resetForm = () => {
+    setNoteTitle("");
     setNoteContent("");
-    setNoteCategory("");
-    setIsPrivate(true);
+    setSessionDate("");
+    setIsPrivate(false);
     setEditingNote(null);
   };
 
-  const getCategoryColor = (category) => {
-    switch (category) {
-      case "academic":
-        return "bg-blue-100 text-blue-800";
-      case "behavioral":
-        return "bg-green-100 text-green-800";
-      case "career":
-        return "bg-purple-100 text-purple-800";
-      case "personal":
-        return "bg-orange-100 text-orange-800";
-      case "attendance":
-        return "bg-red-100 text-red-800";
-      case "general":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -289,7 +181,64 @@ export default function StudentNotesPage() {
     });
   };
 
-  const isFormValid = noteContent.trim() && noteCategory;
+  const isFormValid = noteTitle.trim() && noteContent.trim() && sessionDate;
+  const isLoading = createNoteMutation.isPending || updateNoteMutation.isPending || deleteNoteMutation.isPending;
+
+  // Loading and error states
+  if (isLoadingNotes || isLoadingStudent) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-8 w-8 animate-spin text-[#0056b3]" />
+          <span className="text-gray-600">Loading student notes...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isNotesError || isStudentError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Failed to load student notes
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {notesError?.response?.data?.error?.message || "Something went wrong while fetching data."}
+          </p>
+          <Button 
+            onClick={() => refetchNotes()}
+            className="bg-[#0056b3] hover:bg-[#004494]"
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!studentData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Student not found
+          </h3>
+          <p className="text-gray-500 mb-4">
+            The student you're looking for doesn't exist or you don't have permission to view their notes.
+          </p>
+          <Button 
+            onClick={() => navigate("/students")}
+            className="bg-[#0056b3] hover:bg-[#004494]"
+          >
+            Back to Students
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -309,11 +258,10 @@ export default function StudentNotesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              Notes for {studentData.name}
+              Notes for {studentData?.name || 'Student'}
             </h1>
             <p className="text-gray-600 mt-2">
-              {studentData.studentId} • {studentData.department} •{" "}
-              {studentData.semester} Semester
+              {studentData?.studentId} • {studentData?.department}
             </p>
           </div>
 
@@ -337,36 +285,39 @@ export default function StudentNotesPage() {
             />
           </div>
 
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Filter by category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {noteCategories.map((category) => (
-                <SelectItem key={category.value} value={category.value}>
-                  {category.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Input
+              type="date"
+              placeholder="Start date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full sm:w-40"
+            />
+            <Input
+              type="date"
+              placeholder="End date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full sm:w-40"
+            />
+          </div>
         </div>
 
         {/* Notes List */}
-        {filteredNotes.length === 0 ? (
+        {notes.length === 0 ? (
           <div className="text-center py-12">
             <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchQuery || filterCategory !== "all"
+              {searchQuery || startDate || endDate
                 ? "No notes found"
                 : "No notes yet"}
             </h3>
             <p className="text-gray-500 mb-4">
-              {searchQuery || filterCategory !== "all"
+              {searchQuery || startDate || endDate
                 ? "Try adjusting your search or filter criteria"
                 : "Start by adding the first note for this student"}
             </p>
-            {!searchQuery && filterCategory === "all" && (
+            {!searchQuery && !startDate && !endDate && (
               <Button
                 onClick={handleAddNote}
                 className="bg-[#0056b3] hover:bg-[#004494]"
@@ -377,7 +328,7 @@ export default function StudentNotesPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredNotes.map((note) => (
+            {notes.map((note) => (
               <Card
                 key={note.id}
                 className="hover:shadow-md transition-shadow duration-200"
@@ -385,11 +336,9 @@ export default function StudentNotesPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
-                      <Badge className={getCategoryColor(note.category)}>
-                        {noteCategories.find(
-                          (cat) => cat.value === note.category
-                        )?.label || note.category}
-                      </Badge>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {note.title}
+                      </h3>
                       <div className="flex items-center space-x-2 text-sm text-gray-500">
                         {note.isPrivate ? (
                           <div className="flex items-center space-x-1">
@@ -435,19 +384,20 @@ export default function StudentNotesPage() {
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-1">
                         <User className="h-3 w-3" />
-                        <span>{note.createdBy}</span>
+                        <span>{note.counselor?.name || 'Counselor'}</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <Calendar className="h-3 w-3" />
-                        <span>{formatDate(note.createdAt)}</span>
+                        <span>Session: {formatDate(note.sessionDate)}</span>
                       </div>
                     </div>
 
-                    {note.updatedAt !== note.createdAt && (
-                      <span className="text-xs">
-                        Updated: {formatDate(note.updatedAt)}
-                      </span>
-                    )}
+                    <div className="text-xs">
+                      <div>Created: {formatDate(note.createdAt)}</div>
+                      {note.updatedAt !== note.createdAt && (
+                        <div>Updated: {formatDate(note.updatedAt)}</div>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -466,27 +416,32 @@ export default function StudentNotesPage() {
                 <FileText className="h-5 w-5 text-[#0056b3]" />
                 <span>
                   {editingNote ? "Edit Note" : "Add Note"} for{" "}
-                  {studentData.name}
+                  {studentData?.name || 'Student'}
                 </span>
               </DialogTitle>
             </DialogHeader>
 
             <div className="space-y-6 py-4">
-              {/* Note Category */}
+              {/* Note Title */}
               <div className="space-y-2">
-                <Label htmlFor="category">Note Category</Label>
-                <Select value={noteCategory} onValueChange={setNoteCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select note category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {noteCategories.map((category) => (
-                      <SelectItem key={category.value} value={category.value}>
-                        {category.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="title">Note Title</Label>
+                <Input
+                  id="title"
+                  placeholder="Enter a title for this note..."
+                  value={noteTitle}
+                  onChange={(e) => setNoteTitle(e.target.value)}
+                />
+              </div>
+
+              {/* Session Date */}
+              <div className="space-y-2">
+                <Label htmlFor="sessionDate">Session Date</Label>
+                <Input
+                  id="sessionDate"
+                  type="date"
+                  value={sessionDate}
+                  onChange={(e) => setSessionDate(e.target.value)}
+                />
               </div>
 
               {/* Note Content */}

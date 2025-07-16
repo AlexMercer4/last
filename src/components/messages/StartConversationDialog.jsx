@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, User, Plus } from "lucide-react";
+import { Search, User, Plus, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useStudents, useCounselors } from "@/hooks/useUsers";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function StartConversationDialog({
   open,
@@ -18,90 +20,26 @@ export default function StartConversationDialog({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Use hooks properly - they must be called at the top level
+  const socketContext = useSocket();
+  const isUserOnline = socketContext?.isUserOnline || (() => false);
+  
+  // Fetch real data from API
+  const { data: counselors = [], isLoading: counselorsLoading, error: counselorsError } = useCounselors();
+  const { data: students = [], isLoading: studentsLoading, error: studentsError } = useStudents();
 
-  // Mock data - replace with actual API calls
-  const counselors = [
-    {
-      id: "2",
-      name: "Dr. Sarah Ahmed",
-      email: "sarah@university.edu",
-      role: "counselor",
-      isOnline: true,
-    },
-    {
-      id: "3",
-      name: "Prof. Ahmad Hassan",
-      email: "ahmad@university.edu",
-      role: "counselor",
-      isOnline: false,
-    },
-    {
-      id: "4",
-      name: "Dr. Fatima Sheikh",
-      email: "fatima@university.edu",
-      role: "counselor",
-      isOnline: true,
-    },
-    {
-      id: "5",
-      name: "Dr. Ali Khan",
-      email: "ali@university.edu",
-      role: "counselor",
-      isOnline: false,
-    },
-    {
-      id: "6",
-      name: "Prof. Zara Malik",
-      email: "zara@university.edu",
-      role: "counselor",
-      isOnline: true,
-    },
-  ];
+  // Determine which users to show based on current user role
+  const availableUsers = userRole === "student" ? (counselors || []) : (students || []);
+  const isDataLoading = userRole === "student" ? counselorsLoading : studentsLoading;
+  const hasError = userRole === "student" ? counselorsError : studentsError;
 
-  const students = [
-    {
-      id: "7",
-      name: "Ahmad Ali",
-      email: "ahmad.ali@student.edu",
-      role: "student",
-      isOnline: true,
-    },
-    {
-      id: "8",
-      name: "Fatima Khan",
-      email: "fatima.khan@student.edu",
-      role: "student",
-      isOnline: false,
-    },
-    {
-      id: "9",
-      name: "Hassan Ahmed",
-      email: "hassan.ahmed@student.edu",
-      role: "student",
-      isOnline: true,
-    },
-    {
-      id: "10",
-      name: "Ayesha Malik",
-      email: "ayesha.malik@student.edu",
-      role: "student",
-      isOnline: false,
-    },
-    {
-      id: "11",
-      name: "Omar Sheikh",
-      email: "omar.sheikh@student.edu",
-      role: "student",
-      isOnline: true,
-    },
-  ];
-
-  const availableUsers = userRole === "student" ? counselors : students;
-  const filteredUsers = availableUsers.filter(
+  // Filter users based on search query with null checks
+  const filteredUsers = Array.isArray(availableUsers) ? availableUsers.filter(
     (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user?.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  ) : [];
 
   const handleStartConversation = async (userId) => {
     setIsLoading(true);
@@ -155,61 +93,74 @@ export default function StartConversationDialog({
 
           {/* Users List */}
           <div className="max-h-80 overflow-y-auto space-y-2">
-            {filteredUsers.length === 0 ? (
+            {hasError ? (
+              <div className="text-center py-8 text-red-500">
+                <p>Failed to load {userRole === "student" ? "counselors" : "students"}</p>
+                <p className="text-sm text-gray-500 mt-1">Please try again later</p>
+              </div>
+            ) : isDataLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-600">Loading users...</span>
+              </div>
+            ) : filteredUsers.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {searchQuery
                   ? "No users found matching your search"
-                  : "No users available"}
+                  : `No ${userRole === "student" ? "counselors" : "students"} available`}
               </div>
             ) : (
-              filteredUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <div className="bg-gray-200 p-2 rounded-full">
-                        <User className="h-5 w-5 text-gray-600" />
+              filteredUsers.map((user) => {
+                const userIsOnline = isUserOnline ? isUserOnline(user.id) : false;
+                return (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="relative">
+                        <div className="bg-gray-200 p-2 rounded-full">
+                          <User className="h-5 w-5 text-gray-600" />
+                        </div>
+                        {userIsOnline && (
+                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                        )}
                       </div>
-                      {user.isOnline && (
-                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-medium text-gray-900 truncate">
+                          {user.name}
+                        </h3>
+                        <p className="text-xs text-gray-500 truncate">
+                          {user.email}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-gray-900 truncate">
-                        {user.name}
-                      </h3>
-                      <p className="text-xs text-gray-500 truncate">
-                        {user.email}
-                      </p>
+                    <div className="flex items-center space-x-2">
+                      <Badge
+                        variant={userIsOnline ? "default" : "secondary"}
+                        className={
+                          userIsOnline
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-600"
+                        }
+                      >
+                        {userIsOnline ? "Online" : "Offline"}
+                      </Badge>
+
+                      <Button
+                        size="sm"
+                        onClick={() => handleStartConversation(user.id)}
+                        disabled={isLoading}
+                        className="bg-[#0056b3] hover:bg-[#004494] text-white"
+                      >
+                        {isLoading ? "Starting..." : "Start Chat"}
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Badge
-                      variant={user.isOnline ? "default" : "secondary"}
-                      className={
-                        user.isOnline
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-600"
-                      }
-                    >
-                      {user.isOnline ? "Online" : "Offline"}
-                    </Badge>
-
-                    <Button
-                      size="sm"
-                      onClick={() => handleStartConversation(user.id)}
-                      disabled={isLoading}
-                      className="bg-[#0056b3] hover:bg-[#004494] text-white"
-                    >
-                      {isLoading ? "Starting..." : "Start Chat"}
-                    </Button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

@@ -9,148 +9,93 @@ import {
   UserCheck,
   BookOpen,
   GraduationCap,
-  Edit,
   Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import Header from "@/components/layout/Header";
-import EditProfileDialog from "@/components/profile/EditProfileDialog";
+import ChangePasswordDialog from "@/components/profile/ChangePasswordDialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { usersApi } from "@/api/users";
+import { useQuery } from "@tanstack/react-query";
 
 export default function ProfilePage() {
   const { id } = useParams();
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
   const { user } = useAuth();
-  const userRole = user?.role;
 
-  // Mock function to get student data by ID
-  const getStudentById = (studentId) => {
-    const mockStudents = {
-      1: {
-        id: "1",
-        name: "Ahmad Ali",
-        email: "ahmad.ali@student.buitems.edu.pk",
-        phone: "+92 300 1234567",
-        role: "student",
-        studentId: "CS-2024-001",
-        department: "Computer Science",
-        currentSemester: "6th Semester",
-        cgpa: 3.85,
-        enrollmentDate: "September 2022",
-        academicAdvisor: "Dr. Sarah Ahmed",
-        address: "House 123, Street 45, Quetta, Balochistan",
-        emergencyContact: {
-          name: "Muhammad Ali",
-          phone: "+92 300 9876543",
-          relationship: "Father",
-        },
-        createdAt: "2022-09-01T00:00:00Z",
-        updatedAt: "2024-06-20T10:00:00Z",
-        lastLogin: "2024-06-20T14:30:00Z",
-      },
-      2: {
-        id: "2",
-        name: "Fatima Khan",
-        email: "fatima.khan@student.buitems.edu.pk",
-        phone: "+92 301 2345678",
-        role: "student",
-        studentId: "EE-2024-015",
-        department: "Electrical Engineering",
-        currentSemester: "4th Semester",
-        cgpa: 3.92,
-        enrollmentDate: "September 2023",
-        academicAdvisor: "Prof. Ahmad Hassan",
-        address: "House 456, Street 78, Quetta, Balochistan",
-        emergencyContact: {
-          name: "Abdul Khan",
-          phone: "+92 301 8765432",
-          relationship: "Father",
-        },
-        createdAt: "2023-09-01T00:00:00Z",
-        updatedAt: "2024-06-18T10:00:00Z",
-        lastLogin: "2024-06-18T16:20:00Z",
-      },
-    };
+  // Determine if viewing another user's profile
+  const isViewingOtherProfile = id && id !== user?.id;
+  const canViewOtherProfile = user?.role === "admin" || user?.role === "chairperson" || user?.role === "counselor";
 
-    return mockStudents[studentId] || null;
-  };
-
-  // Mock user profile data - replace with actual API calls
-  const [userProfile, setUserProfile] = useState(() => {
-    // If viewing another user's profile (counselor viewing student)
-    if (id && userRole === "counselor") {
-      const studentProfile = getStudentById(id);
-      if (studentProfile) {
-        return studentProfile;
+  // Fetch user profile data
+  const { data: userProfile, isLoading, error } = useQuery({
+    queryKey: ["user", id || user?.id],
+    queryFn: async () => {
+      if (id && id !== user?.id) {
+        // Viewing another user's profile
+        if (!canViewOtherProfile) {
+          throw new Error("Unauthorized to view other profiles");
+        }
+        const response = await usersApi.getUserById(id);
+        return response.data;
+      } else {
+        // Viewing own profile - use current user data
+        return user;
       }
-    }
-
-    // Default to current user's profile
-    return {
-      id: userRole === "counselor" ? "100" : "1",
-      name: userRole === "counselor" ? "Dr. Sarah Ahmed" : "Ahmad Ali",
-      email:
-        userRole === "counselor"
-          ? "sarah.ahmed@buitems.edu.pk"
-          : "ahmad.ali@student.buitems.edu.pk",
-      phone: userRole === "counselor" ? "+92 302 1234567" : "+92 300 1234567",
-      role: userRole,
-      studentId: userRole === "student" ? "CS-2024-001" : undefined,
-      department:
-        userRole === "student" ? "Computer Science" : "Psychology Department",
-      currentSemester: userRole === "student" ? "6th Semester" : undefined,
-      cgpa: userRole === "student" ? 3.85 : undefined,
-      enrollmentDate: userRole === "student" ? "September 2022" : undefined,
-      academicAdvisor: userRole === "student" ? "Dr. Sarah Ahmed" : undefined,
-      employeeId: userRole === "counselor" ? "EMP-2020-045" : undefined,
-      specialization:
-        userRole === "counselor"
-          ? ["Academic Counseling", "Career Guidance"]
-          : undefined,
-      officeLocation:
-        userRole === "counselor" ? "Room 201, Counseling Center" : undefined,
-      officeHours:
-        userRole === "counselor" ? "Mon-Fri: 9:00 AM - 5:00 PM" : undefined,
-      yearsOfExperience: userRole === "counselor" ? 8 : undefined,
-      address: "House 123, Street 45, Quetta, Balochistan",
-      emergencyContact: {
-        name: userRole === "counselor" ? "Dr. Ahmad Ahmed" : "Muhammad Ali",
-        phone: userRole === "counselor" ? "+92 302 9876543" : "+92 300 9876543",
-        relationship: userRole === "counselor" ? "Spouse" : "Father",
-      },
-      createdAt: "2022-09-01T00:00:00Z",
-      updatedAt: "2024-06-20T10:00:00Z",
-      lastLogin: "2024-06-20T14:30:00Z",
-    };
+    },
+    enabled: !!user,
   });
 
-  const isViewingOtherProfile = id && userRole === "counselor";
-
-  const handleSaveProfile = async (updatedFields) => {
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      setUserProfile((prev) => ({
-        ...prev,
-        ...updatedFields,
-        updatedAt: new Date().toISOString(),
-      }));
-
-      toast.success("Profile updated successfully!");
-    } catch (error) {
-      toast.error("Failed to update profile. Please try again.");
-      throw error;
-    }
+  const handleChangePassword = () => {
+    setIsChangePasswordDialogOpen(true);
   };
 
-  const handleResetPassword = () => {
-    // This would typically open a password reset dialog or redirect to a password reset page
-    toast.info("Password reset functionality would be implemented here");
-  };
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0056b3] mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading profile...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">Failed to load profile</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!userProfile) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <p className="text-gray-600">Profile not found</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -177,7 +122,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header userRole={userRole} />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
@@ -189,7 +133,7 @@ export default function ProfilePage() {
           </h1>
           <p className="text-gray-600 mt-2">
             {isViewingOtherProfile
-              ? "View student information and academic details."
+              ? "View user information and details."
               : "Manage your account information and settings."}
           </p>
         </div>
@@ -228,14 +172,16 @@ export default function ProfilePage() {
                 </div>
               </div>
 
+              {/* Show change password button only for own profile */}
               {!isViewingOtherProfile && (
-                <div className="mt-4 md:mt-0 flex space-x-2">
+                <div className="mt-4 md:mt-0">
                   <Button
-                    onClick={() => setIsEditDialogOpen(true)}
-                    className="bg-[#ffbc3b] hover:bg-[#e6a834] text-white flex items-center space-x-2"
+                    onClick={handleChangePassword}
+                    variant="outline"
+                    className="border-white text-white hover:bg-white hover:text-[#0056b3] flex items-center space-x-2"
                   >
-                    <Edit className="h-4 w-4" />
-                    <span>Edit Profile</span>
+                    <Key className="h-4 w-4" />
+                    <span>Change Password</span>
                   </Button>
                 </div>
               )}
@@ -448,11 +394,11 @@ export default function ProfilePage() {
                   </div>
 
                   <Button
-                    onClick={handleResetPassword}
+                    onClick={handleChangePassword}
                     variant="outline"
                     className="w-full border-[#0056b3] text-[#0056b3] hover:bg-[#0056b3] hover:text-white"
                   >
-                    Reset Password
+                    Change Password
                   </Button>
                 </div>
               </CardContent>
@@ -460,13 +406,11 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Edit Profile Dialog - Only show for own profile */}
+        {/* Change Password Dialog - Only for own profile */}
         {!isViewingOtherProfile && (
-          <EditProfileDialog
-            open={isEditDialogOpen}
-            onOpenChange={setIsEditDialogOpen}
-            userProfile={userProfile}
-            onSave={handleSaveProfile}
+          <ChangePasswordDialog
+            open={isChangePasswordDialogOpen}
+            onOpenChange={setIsChangePasswordDialogOpen}
           />
         )}
       </main>

@@ -1,14 +1,8 @@
 import { Check, CheckCheck } from "lucide-react";
 import FileAttachmentCard from "./FileAttachmentCard";
+import { formatMessageDate } from "@/utils/formatters";
 
 export default function ChatMessage({ message, isOwn, sender }) {
-  const formatTime = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
 
   return (
     <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-4`}>
@@ -39,7 +33,7 @@ export default function ChatMessage({ message, isOwn, sender }) {
           }`}
         >
           <span className="text-xs text-gray-500">
-            {formatTime(message.timestamp)}
+            {formatMessageDate(message.createdAt || message.timestamp)}
           </span>
           {isOwn && (
             <div className="text-gray-400">

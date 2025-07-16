@@ -14,17 +14,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import Header from "@/components/layout/Header";
 import AddStudentDialog from "@/components/users/AddStudentDialog";
 import AddCounselorDialog from "@/components/users/AddCounselorDialog";
+import AddChairpersonDialog from "@/components/users/AddChairpersonDialog";
 import EditUserDialog from "@/components/users/EditUserDialog";
 import ViewUserDetailsDialog from "@/components/users/ViewUserDetailsDialog";
 import UserManagementTable from "@/components/users/UserManagementTable";
+import { useAuth } from "@/contexts/AuthContext";
+import { usersApi } from "@/api/users";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function UserManagementPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("students");
   const [isAddStudentDialogOpen, setIsAddStudentDialogOpen] = useState(false);
-  const [isAddCounselorDialogOpen, setIsAddCounselorDialogOpen] =
-    useState(false);
+  const [isAddCounselorDialogOpen, setIsAddCounselorDialogOpen] = useState(false);
+  const [isAddChairpersonDialogOpen, setIsAddChairpersonDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDetailsDialogOpen, setIsViewDetailsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -32,153 +39,153 @@ export default function UserManagementPage() {
   const [userToEdit, setUserToEdit] = useState(null);
   const [userToView, setUserToView] = useState(null);
 
-  // Mock data - replace with actual API calls
-  const [students, setStudents] = useState([
-    {
-      id: "1",
-      name: "Ahmad Ali",
-      email: "ahmad.ali@student.buitems.edu.pk",
-      phone: "+92 300 1234567",
-      role: "student",
-      cmsId: "CS-2024-001",
-      department: "Computer Science",
-      batch: "Fall 2021",
-      currentSemester: "6th Semester",
-      cgpa: 3.85,
-      enrollmentDate: "2021-09-01",
-      isActive: true,
-      createdAt: "2021-09-01T00:00:00Z",
-      updatedAt: "2024-06-20T10:00:00Z",
-      lastLogin: "2024-06-20T14:30:00Z",
-      address: "House 123, Street 45, Quetta",
-      assignedCounselor: "Dr. Sarah Ahmed",
-      emergencyContact: {
-        name: "Muhammad Ali",
-        phone: "+92 300 9876543",
-        relationship: "Father",
-      },
-    },
-    {
-      id: "2",
-      name: "Fatima Khan",
-      email: "fatima.khan@student.buitems.edu.pk",
-      phone: "+92 301 2345678",
-      role: "student",
-      cmsId: "EE-2024-015",
-      department: "Electrical Engineering",
-      batch: "Spring 2022",
-      currentSemester: "4th Semester",
-      cgpa: 3.92,
-      enrollmentDate: "2022-02-01",
-      isActive: true,
-      createdAt: "2022-02-01T00:00:00Z",
-      updatedAt: "2024-06-18T10:00:00Z",
-      lastLogin: "2024-06-18T16:20:00Z",
-      address: "House 456, Street 78, Quetta",
-      assignedCounselor: "Prof. Ahmad Hassan",
-    },
-    {
-      id: "3",
-      name: "Hassan Ahmed",
-      email: "hassan.ahmed@student.buitems.edu.pk",
-      phone: "+92 302 3456789",
-      role: "student",
-      cmsId: "ME-2024-032",
-      department: "Mechanical Engineering",
-      batch: "Fall 2020",
-      currentSemester: "8th Semester",
-      cgpa: 2.95,
-      enrollmentDate: "2020-09-01",
-      isActive: false,
-      createdAt: "2020-09-01T00:00:00Z",
-      updatedAt: "2024-06-15T10:00:00Z",
-      lastLogin: "2024-06-10T12:15:00Z",
-      address: "House 789, Street 90, Quetta",
-    },
-  ]);
+  // Check if user has admin privileges
+  const isAdmin = user?.role === "admin";
+  const canManageUsers = user?.role === "admin" || user?.role === "chairperson";
 
-  const [counselors, setCounselors] = useState([
-    {
-      id: "100",
-      name: "Dr. Sarah Ahmed",
-      email: "sarah.ahmed@buitems.edu.pk",
-      phone: "+92 302 1234567",
-      role: "counselor",
-      employeeId: "EMP-2020-045",
-      department: "Psychology Department",
-      specialization: ["Academic Counseling", "Career Guidance"],
-      officeLocation: "Room 201, Counseling Center",
-      officeHours: "Mon-Fri: 9:00 AM - 5:00 PM",
-      yearsOfExperience: 8,
-      maxStudentsCapacity: 40,
-      currentStudentsCount: 28,
-      isActive: true,
-      createdAt: "2020-08-15T00:00:00Z",
-      updatedAt: "2024-06-20T10:00:00Z",
-      lastLogin: "2024-06-20T08:30:00Z",
-      address: "House 789, Street 12, Quetta",
+  // Redirect if user doesn't have permission
+  if (!canManageUsers) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header userRole={user?.role} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">Access Denied</p>
+              <p className="text-gray-600">You don't have permission to access user management.</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Fetch students data
+  const { data: students = [], isLoading: studentsLoading } = useQuery({
+    queryKey: ["students"],
+    queryFn: async () => {
+      const response = await usersApi.getStudents();
+      return response;
     },
-    {
-      id: "101",
-      name: "Prof. Ahmad Hassan",
-      email: "ahmad.hassan@buitems.edu.pk",
-      phone: "+92 303 2345678",
-      role: "counselor",
-      employeeId: "EMP-2019-032",
-      department: "Academic Affairs",
-      specialization: ["Academic Planning", "Study Skills"],
-      officeLocation: "Room 105, Student Services",
-      officeHours: "Mon-Thu: 10:00 AM - 4:00 PM",
-      yearsOfExperience: 12,
-      maxStudentsCapacity: 35,
-      currentStudentsCount: 22,
-      isActive: false,
-      createdAt: "2019-07-20T00:00:00Z",
-      updatedAt: "2024-06-15T10:00:00Z",
-      lastLogin: "2024-06-10T15:45:00Z",
-      address: "House 321, Street 67, Quetta",
+  });
+
+  // Fetch counselors data
+  const { data: counselors = [], isLoading: counselorsLoading } = useQuery({
+    queryKey: ["counselors"],
+    queryFn: async () => {
+      const response = await usersApi.getCounselors();
+      return response;
     },
-  ]);
+  });
+
+  // Fetch all users for admin (includes chairpersons)
+  const { data: allUsers = [], isLoading: allUsersLoading } = useQuery({
+    queryKey: ["allUsers"],
+    queryFn: async () => {
+      const response = await usersApi.getAllUsers();
+      return response.data;
+    },
+    enabled: isAdmin,
+  });
+
+  // Filter chairpersons from all users
+  const chairpersons = allUsers.filter(user => user.role === "CHAIRPERSON");
+
+  // Create user mutation
+  const createUserMutation = useMutation({
+    mutationFn: async (userData) => {
+      const response = await usersApi.createUser(userData);
+      return response.data;
+    },
+    onSuccess: (newUser) => {
+      if (newUser.role === "STUDENT") {
+        queryClient.setQueryData(["students"], (old) => [newUser, ...(old || [])]);
+      } else if (newUser.role === "COUNSELOR") {
+        queryClient.setQueryData(["counselors"], (old) => [newUser, ...(old || [])]);
+      } else if (newUser.role === "CHAIRPERSON") {
+        queryClient.invalidateQueries(["allUsers"]);
+      }
+      toast.success(`${newUser.role.toLowerCase().charAt(0).toUpperCase() + newUser.role.toLowerCase().slice(1)} created successfully!`);
+    },
+    onError: (error) => {
+      const errorMessage = error.response?.data?.error?.message || "Failed to create user";
+      toast.error(errorMessage);
+    },
+  });
+
+  // Update user mutation
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, userData }) => {
+      const response = await usersApi.updateUser(id, userData);
+      return response.data;
+    },
+    onSuccess: (updatedUser) => {
+      if (updatedUser.role === "STUDENT") {
+        queryClient.setQueryData(["students"], (old) =>
+          (old || []).map((user) => (user.id === updatedUser.id ? updatedUser : user))
+        );
+      } else if (updatedUser.role === "COUNSELOR") {
+        queryClient.setQueryData(["counselors"], (old) =>
+          (old || []).map((user) => (user.id === updatedUser.id ? updatedUser : user))
+        );
+      } else if (updatedUser.role === "CHAIRPERSON") {
+        queryClient.invalidateQueries(["allUsers"]);
+      }
+      toast.success("User updated successfully!");
+      setIsEditDialogOpen(false);
+      setUserToEdit(null);
+    },
+    onError: (error) => {
+      const errorMessage = error.response?.data?.error?.message || "Failed to update user";
+      toast.error(errorMessage);
+    },
+  });
+
+  // Delete user mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId) => {
+      await usersApi.deleteUser(userId);
+      return userId;
+    },
+    onSuccess: (deletedUserId) => {
+      queryClient.setQueryData(["students"], (old) =>
+        (old || []).filter((user) => user.id !== deletedUserId)
+      );
+      queryClient.setQueryData(["counselors"], (old) =>
+        (old || []).filter((user) => user.id !== deletedUserId)
+      );
+      if (isAdmin) {
+        queryClient.invalidateQueries(["allUsers"]);
+      }
+      toast.success("User deleted successfully!");
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    },
+    onError: (error) => {
+      const errorMessage = error.response?.data?.error?.message || "Failed to delete user";
+      toast.error(errorMessage);
+    },
+  });
 
   const handleAddStudent = async (studentData) => {
-    try {
-      const newStudent = {
-        id: Date.now().toString(),
-        ...studentData,
-        role: "student",
-        cgpa: 0,
-        enrollmentDate: new Date().toISOString().split("T")[0],
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      setStudents((prev) => [newStudent, ...prev]);
-      toast.success("Student added successfully!");
-    } catch (error) {
-      toast.error("Failed to add student. Please try again.");
-      throw error;
-    }
+    createUserMutation.mutate({
+      ...studentData,
+      role: "student",
+    });
   };
 
   const handleAddCounselor = async (counselorData) => {
-    try {
-      const newCounselor = {
-        id: Date.now().toString(),
-        ...counselorData,
-        role: "counselor",
-        currentStudentsCount: 0,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    createUserMutation.mutate({
+      ...counselorData,
+      role: "counselor",
+    });
+  };
 
-      setCounselors((prev) => [newCounselor, ...prev]);
-      toast.success("Counselor added successfully!");
-    } catch (error) {
-      toast.error("Failed to add counselor. Please try again.");
-      throw error;
-    }
+  const handleAddChairperson = async (chairpersonData) => {
+    createUserMutation.mutate({
+      ...chairpersonData,
+      role: "chairperson",
+    });
   };
 
   const handleEditUser = (user) => {
@@ -188,34 +195,10 @@ export default function UserManagementPage() {
 
   const handleUpdateUser = async (userData) => {
     if (!userToEdit) return;
-
-    try {
-      const updatedUser = {
-        ...userToEdit,
-        ...userData,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (userToEdit.role === "student") {
-        setStudents((prev) =>
-          prev.map((s) => (s.id === userToEdit.id ? updatedUser : s))
-        );
-      } else {
-        setCounselors((prev) =>
-          prev.map((c) => (c.id === userToEdit.id ? updatedUser : c))
-        );
-      }
-
-      toast.success(
-        `${
-          userToEdit.role === "student" ? "Student" : "Counselor"
-        } updated successfully!`
-      );
-      setUserToEdit(null);
-    } catch (error) {
-      toast.error("Failed to update user. Please try again.");
-      throw error;
-    }
+    updateUserMutation.mutate({
+      id: userToEdit.id,
+      userData,
+    });
   };
 
   const handleDeleteUser = (user) => {
@@ -225,41 +208,14 @@ export default function UserManagementPage() {
 
   const confirmDeleteUser = () => {
     if (!userToDelete) return;
-
-    if (userToDelete.role === "student") {
-      setStudents((prev) => prev.filter((s) => s.id !== userToDelete.id));
-    } else {
-      setCounselors((prev) => prev.filter((c) => c.id !== userToDelete.id));
-    }
-
-    toast.success(
-      `${
-        userToDelete.role === "student" ? "Student" : "Counselor"
-      } deleted successfully`
-    );
-    setIsDeleteDialogOpen(false);
-    setUserToDelete(null);
+    deleteUserMutation.mutate(userToDelete.id);
   };
 
   const handleToggleUserStatus = (user) => {
-    const updateUser = (prev) =>
-      prev.map((u) =>
-        u.id === user.id
-          ? { ...u, isActive: !u.isActive, updatedAt: new Date().toISOString() }
-          : u
-      );
-
-    if (user.role === "student") {
-      setStudents(updateUser);
-    } else {
-      setCounselors(updateUser);
-    }
-
-    toast.success(
-      `${user.role === "student" ? "Student" : "Counselor"} ${
-        user.isActive ? "blocked" : "activated"
-      } successfully`
-    );
+    updateUserMutation.mutate({
+      id: user.id,
+      userData: { isActive: !user.isActive },
+    });
   };
 
   const handleViewUserDetails = (user) => {
@@ -268,10 +224,12 @@ export default function UserManagementPage() {
   };
 
   const getStats = () => {
-    const activeStudents = students.filter((s) => s.isActive).length;
-    const inactiveStudents = students.filter((s) => !s.isActive).length;
-    const activeCounselors = counselors.filter((c) => c.isActive).length;
-    const inactiveCounselors = counselors.filter((c) => !c.isActive).length;
+    const activeStudents = students.filter((s) => s.isActive !== false).length;
+    const inactiveStudents = students.filter((s) => s.isActive === false).length;
+    const activeCounselors = counselors.filter((c) => c.isActive !== false).length;
+    const inactiveCounselors = counselors.filter((c) => c.isActive === false).length;
+    const activeChairpersons = chairpersons.filter((c) => c.isActive !== false).length;
+    const inactiveChairpersons = chairpersons.filter((c) => c.isActive === false).length;
 
     return {
       totalStudents: students.length,
@@ -280,13 +238,35 @@ export default function UserManagementPage() {
       totalCounselors: counselors.length,
       activeCounselors,
       inactiveCounselors,
+      totalChairpersons: chairpersons.length,
+      activeChairpersons,
+      inactiveChairpersons,
     };
   };
 
   const stats = getStats();
 
+  if (studentsLoading || counselorsLoading || (isAdmin && allUsersLoading)) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header userRole={user?.role} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0056b3] mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading users...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <Header userRole={user?.role} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
         <div className="mb-8">
@@ -297,7 +277,7 @@ export default function UserManagementPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -308,7 +288,7 @@ export default function UserManagementPage() {
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalStudents}</div>
               <p className="text-xs text-muted-foreground">
-                {stats.activeStudents} active, {stats.inactiveStudents} inactive
+                {stats.activeStudents} active
               </p>
             </CardContent>
           </Card>
@@ -340,8 +320,7 @@ export default function UserManagementPage() {
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalCounselors}</div>
               <p className="text-xs text-muted-foreground">
-                {stats.activeCounselors} active, {stats.inactiveCounselors}{" "}
-                inactive
+                {stats.activeCounselors} active
               </p>
             </CardContent>
           </Card>
@@ -362,6 +341,42 @@ export default function UserManagementPage() {
               </p>
             </CardContent>
           </Card>
+
+          {isAdmin && (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Total Chairpersons
+                  </CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalChairpersons}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.activeChairpersons} active
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Active Chairpersons
+                  </CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-purple-600">
+                    {stats.activeChairpersons}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Currently active
+                  </p>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
         {/* User Management Tabs */}
@@ -371,13 +386,18 @@ export default function UserManagementPage() {
           className="space-y-6"
         >
           <div className="flex items-center justify-between">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsList className={`grid w-full ${isAdmin ? 'max-w-lg grid-cols-3' : 'max-w-md grid-cols-2'}`}>
               <TabsTrigger value="students">
                 Students ({students.length})
               </TabsTrigger>
               <TabsTrigger value="counselors">
                 Counselors ({counselors.length})
               </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="chairpersons">
+                  Chairpersons ({chairpersons.length})
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <div className="flex space-x-2">
@@ -398,6 +418,16 @@ export default function UserManagementPage() {
                 >
                   <UserPlus className="h-4 w-4" />
                   <span>Add Counselor</span>
+                </Button>
+              )}
+
+              {activeTab === "chairpersons" && isAdmin && (
+                <Button
+                  onClick={() => setIsAddChairpersonDialogOpen(true)}
+                  className="bg-[#0056b3] hover:bg-[#004494] flex items-center space-x-2"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span>Add Chairperson</span>
                 </Button>
               )}
             </div>
@@ -424,6 +454,19 @@ export default function UserManagementPage() {
               onViewDetails={handleViewUserDetails}
             />
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="chairpersons" className="space-y-6">
+              <UserManagementTable
+                users={chairpersons}
+                userType="chairperson"
+                onEdit={handleEditUser}
+                onDelete={handleDeleteUser}
+                onToggleStatus={handleToggleUserStatus}
+                onViewDetails={handleViewUserDetails}
+              />
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Add Student Dialog */}
@@ -439,6 +482,15 @@ export default function UserManagementPage() {
           onOpenChange={setIsAddCounselorDialogOpen}
           onSubmit={handleAddCounselor}
         />
+
+        {/* Add Chairperson Dialog - Admin only */}
+        {isAdmin && (
+          <AddChairpersonDialog
+            open={isAddChairpersonDialogOpen}
+            onOpenChange={setIsAddChairpersonDialogOpen}
+            onSubmit={handleAddChairperson}
+          />
+        )}
 
         {/* Edit User Dialog */}
         <EditUserDialog
@@ -464,7 +516,11 @@ export default function UserManagementPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>
                 Delete{" "}
-                {userToDelete?.role === "student" ? "Student" : "Counselor"}
+                {userToDelete?.role === "STUDENT" || userToDelete?.role === "student" 
+                  ? "Student" 
+                  : userToDelete?.role === "COUNSELOR" || userToDelete?.role === "counselor"
+                  ? "Counselor"
+                  : "Chairperson"}
               </AlertDialogTitle>
               <AlertDialogDescription>
                 Are you sure you want to delete {userToDelete?.name}? This

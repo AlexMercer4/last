@@ -1,23 +1,31 @@
-import { Calendar, Clock, User, MapPin, MoreVertical } from "lucide-react";
+import { Calendar, Clock, User, MapPin } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { formatDate, formatTime } from "@/lib/utils";
 
 export default function AppointmentCard({
-  appointment,
+  appointment = {},
   userRole,
   onReschedule,
   onCancel,
   onComplete,
 }) {
+  // Defensive checks
+  if (!appointment) {
+    console.error("AppointmentCard: appointment prop is null or undefined");
+    return null;
+  }
+
+  // Normalize status
+  const normalizeStatus = (status) => {
+    if (!status) return 'unknown';
+    return status.toLowerCase();
+  };
+
   const getStatusColor = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeStatus(status);
+    switch (normalizedStatus) {
       case "scheduled":
         return "bg-blue-100 text-blue-800 border-blue-200";
       case "pending":
@@ -32,7 +40,8 @@ export default function AppointmentCard({
   };
 
   const getBorderColor = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeStatus(status);
+    switch (normalizedStatus) {
       case "scheduled":
         return "border-l-blue-500";
       case "pending":
@@ -46,12 +55,19 @@ export default function AppointmentCard({
     }
   };
 
-  const canReschedule =
-    appointment.status === "scheduled" || appointment.status === "pending";
-  const canCancel =
-    appointment.status === "scheduled" || appointment.status === "pending";
-  const canComplete =
-    userRole === "counselor" && appointment.status === "scheduled";
+  const normalizedAppointmentStatus = normalizeStatus(appointment.status);
+
+  const canReschedule = 
+    normalizedAppointmentStatus === "scheduled" || 
+    normalizedAppointmentStatus === "pending";
+  
+  const canCancel = 
+    normalizedAppointmentStatus === "scheduled" || 
+    normalizedAppointmentStatus === "pending";
+  
+  const canComplete = 
+    userRole === "counselor" && 
+    normalizedAppointmentStatus === "scheduled";
 
   return (
     <Card
@@ -64,61 +80,50 @@ export default function AppointmentCard({
           <div className="flex items-center space-x-2">
             <Calendar className="h-4 w-4 text-gray-500" />
             <span className="font-medium text-gray-900">
-              {appointment.date}
+              {formatDate(appointment.date)}
             </span>
           </div>
-          <div className="flex items-center space-x-2">
-            <Badge className={getStatusColor(appointment.status)}>
-              {appointment.status.charAt(0).toUpperCase() +
-                appointment.status.slice(1)}
-            </Badge>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canReschedule && (
-                  <DropdownMenuItem onClick={() => onReschedule(appointment)}>
-                    Reschedule
-                  </DropdownMenuItem>
-                )}
-                {canComplete && (
-                  <DropdownMenuItem onClick={() => onComplete?.(appointment)}>
-                    Mark as Completed
-                  </DropdownMenuItem>
-                )}
-                {canCancel && (
-                  <DropdownMenuItem
-                    onClick={() => onCancel(appointment)}
-                    className="text-red-600"
-                  >
-                    Cancel
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <Badge className={getStatusColor(appointment.status)}>
+            {appointment.status ?
+              appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1).toLowerCase()
+              : 'Unknown'
+            }
+          </Badge>
         </div>
 
         <div className="space-y-2 mb-4">
           <div className="flex items-center space-x-2 text-gray-600">
             <Clock className="h-4 w-4" />
-            <span>{appointment.time}</span>
+            <span>
+              {formatTime(appointment.startTime)} - {formatTime(appointment.endTime)}
+              {appointment.duration && (
+                <span className="text-sm text-gray-500 ml-2">
+                  ({appointment.duration} mins)
+                </span>
+              )}
+            </span>
           </div>
           <div className="flex items-center space-x-2 text-gray-600">
             <User className="h-4 w-4" />
             <span>
               {userRole === "student"
-                ? appointment.counselor
-                : appointment.student || "No student assigned"}
+                ? appointment.counselor?.name || "No counselor assigned"
+                : appointment.student?.name || "No student assigned"}
             </span>
           </div>
-          <div className="flex items-center space-x-2 text-gray-600">
-            <MapPin className="h-4 w-4" />
-            <span>{appointment.location}</span>
-          </div>
+          {appointment.location && (
+            <div className="flex items-center space-x-2 text-gray-600">
+              <MapPin className="h-4 w-4" />
+              <span>{appointment.location}</span>
+            </div>
+          )}
+          {appointment.type && (
+            <div className="flex items-center space-x-2 text-gray-600">
+              <span className="text-sm bg-gray-100 px-2 py-1 rounded">
+                {appointment.type}
+              </span>
+            </div>
+          )}
         </div>
 
         {appointment.notes && (
@@ -133,7 +138,7 @@ export default function AppointmentCard({
           {canReschedule && (
             <Button
               size="sm"
-              className="bg-[#0056b3] hover:bg-[#004494]"
+              variant="outline"
               onClick={() => onReschedule(appointment)}
             >
               Reschedule
@@ -146,6 +151,15 @@ export default function AppointmentCard({
               onClick={() => onCancel(appointment)}
             >
               Cancel
+            </Button>
+          )}
+          {canComplete && (
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => onComplete?.(appointment)}
+            >
+              Complete
             </Button>
           )}
         </div>
